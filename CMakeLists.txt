@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.24)
 
 project(TerraTest
     LANGUAGES CXX
@@ -14,9 +14,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/")
 
 include(FetchContent)
 
+set(GOOGLE_TEST_COMMIT_ID 12a5852e451baabc79c63a86c634912c563d57bc CACHE STRING "Supply the latest commit ID from the GitHub repository.")
+
 FetchContent_Declare(
     googletest
-    URL https://github.com/google/googletest/archive/12a5852e451baabc79c63a86c634912c563d57bc.zip
+    URL https://github.com/google/googletest/archive/${GOOGLE_TEST_COMMIT_ID}.zip
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
