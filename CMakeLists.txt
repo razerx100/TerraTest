@@ -12,26 +12,44 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/")
 
+include(FetchContent)
+
+FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/12a5852e451baabc79c63a86c634912c563d57bc.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+
+if(MSVC)
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+endif()
+
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+
 file(GLOB_RECURSE SRC src/*.cpp)
 
 add_executable(${PROJECT_NAME}
     ${SRC}
 )
 
-set(LIBRARY_TYPE STATIC)
-
-include(FetchContent)
-
-FetchContent_Declare(
-    Terra
-    GIT_REPOSITORY https://github.com/razerx100/Terra.git
-    GIT_TAG ${BRANCH}
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    GTest::gtest_main
 )
+
+set(LIBRARY_TYPE STATIC)
 
 find_package(Vulkan REQUIRED)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Vulkan::Vulkan
+)
+
+FetchContent_Declare(
+    Terra
+    GIT_REPOSITORY https://github.com/razerx100/Terra.git
+    GIT_TAG ${BRANCH}
 )
 
 FetchContent_GetProperties(Terra)
