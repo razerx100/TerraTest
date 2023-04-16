@@ -28,10 +28,14 @@ FetchContent_MakeAvailable(googletest)
 
 enable_testing()
 
-file(GLOB_RECURSE SRC src/*.cpp)
+file(GLOB_RECURSE SRC includes/*.hpp src/*.cpp)
+
+if(PLATFORM STREQUAL "WINDOWS")
+    file(GLOB_RECURSE SRCOPT Win32/*.hpp Win32/*.cpp)
+endif()
 
 add_executable(${PROJECT_NAME}
-    ${SRC}
+    ${SRC} ${SRCOPT}
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
@@ -68,7 +72,9 @@ else()
 endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
-${TERRA_DIR}/includes/ ${TERRA_DIR}/includes/VK/ ${TERRA_DIR}/includes/Exceptions/ ${TERRA_DIR}/templates/ ${TERRA_DIR}/exports/ ${TERRA_DIR}/DirectXMath/Inc/ ${TERRA_DIR}/DirectXMath/Extensions/)
+    ${TERRA_DIR}/includes/ ${TERRA_DIR}/includes/VK/ ${TERRA_DIR}/includes/Exceptions/ ${TERRA_DIR}/templates/ 
+    ${TERRA_DIR}/exports/ ${TERRA_DIR}/DirectXMath/Inc/ ${TERRA_DIR}/DirectXMath/Extensions/
+)
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE "$<$<CONFIG:DEBUG>:_DEBUG>" "$<$<CONFIG:RELEASE>:NDEBUG>")
 
@@ -77,7 +83,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 )
 
 if(PLATFORM STREQUAL "WINDOWS")
-    target_include_directories(${PROJECT_NAME} PRIVATE ${TERRA_DIR}/Win32/includes/)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${TERRA_DIR}/Win32/includes/ Win32/)
     target_compile_definitions(${PROJECT_NAME} PRIVATE TERRA_WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE
         dxgi.lib
