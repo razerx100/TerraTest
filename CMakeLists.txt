@@ -76,6 +76,14 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     Terra
 )
 
+if(PLATFORM STREQUAL "WINDOWS")
+    target_include_directories(${PROJECT_NAME} PRIVATE ${TERRA_DIR}/Win32/includes/)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE TERRA_WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        dxgi.lib
+    )
+endif()
+
 if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /fp:fast /MP /EHa /Ot /W4 /Gy)
 endif()
