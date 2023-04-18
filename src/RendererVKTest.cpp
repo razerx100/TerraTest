@@ -2,12 +2,14 @@
 #include <ObjectManager.hpp>
 #include <SimpleWindow.hpp>
 #include <Terra.hpp>
+#include <GenericCheckFunctions.hpp>
 
 namespace SpecificValues {
 	constexpr std::uint64_t testDisplayWidth = 2560u;
 	constexpr std::uint64_t testDisplayHeight = 1440u;
 	constexpr std::uint32_t windowWidth = 1920u;
 	constexpr std::uint32_t windowHeight = 1080u;
+	constexpr std::uint32_t bufferCount = 2u;
 	constexpr const char* appName = "Terra";
 	constexpr bool meshShader = true;
 }
@@ -31,25 +33,25 @@ protected:
 TEST_F(RendererVKTest, DisplayInitTest) {
 	Terra::InitDisplay(s_objectManager);
 
-	EXPECT_NE(Terra::display, nullptr) << "Failed to initialise display.";
+	ObjectInitCheck("display", Terra::display);
 }
 
 TEST_F(RendererVKTest, VkInstanceInitTest) {
 	s_objectManager.CreateObject(Terra::vkInstance, { SpecificValues::appName }, 5u);
-	EXPECT_NE(Terra::vkInstance, nullptr) << "Failed to initialise vkInstanceManager.";
+	ObjectInitCheck("vkInstance", Terra::vkInstance);
 
 	Terra::vkInstance->AddExtensionNames(Terra::display->GetRequiredExtensions());
 	Terra::vkInstance->CreateInstance();
 
 	VkInstance vkInstance = Terra::vkInstance->GetVKInstance();
-	EXPECT_NE(vkInstance, VK_NULL_HANDLE) << "Failed to initialise the vkInstance.";
+	VkObjectInitCheck("VkInstance", vkInstance);
 }
 
 TEST_F(RendererVKTest, DebugLayerInitTest) {
 #ifdef _DEBUG
 	VkInstance vkInstance = Terra::vkInstance->GetVKInstance();
 	s_objectManager.CreateObject(Terra::debugLayer, { vkInstance }, 4u);
-	EXPECT_NE(Terra::debugLayer, nullptr) << "Failed to initialise debugLayer.";
+	ObjectInitCheck("debugLayer", Terra::debugLayer);
 #endif
 }
 
@@ -61,16 +63,16 @@ TEST_F(RendererVKTest, SurfaceWin32InitTest) {
 	void* moduleHandle = s_window.GetModuleInstance();
 
 	Terra::InitSurface(s_objectManager, vkInstance, windowHandle, moduleHandle);
-	EXPECT_NE(Terra::surface, nullptr) << "Failed to initialise surfaceManager.";
+	ObjectInitCheck("surface", Terra::surface);
 
 	VkSurfaceKHR vkSurface = Terra::surface->GetSurface();
-	EXPECT_NE(vkSurface, VK_NULL_HANDLE) << "Failed to initialise VkSurfaceKHR.";
+	VkObjectInitCheck("VkSurfaceKHR", vkSurface);
 #endif
 }
 
 TEST_F(RendererVKTest, DeviceInitTest) {
 	s_objectManager.CreateObject(Terra::device, 3u);
-	EXPECT_NE(Terra::device, nullptr) << "Failed to initialise DeviceManager.";
+	ObjectInitCheck("device", Terra::device);
 
 	VkSurfaceKHR vkSurface = Terra::surface->GetSurface();
 	VkInstance vkInstance = Terra::vkInstance->GetVKInstance();
@@ -80,11 +82,11 @@ TEST_F(RendererVKTest, DeviceInitTest) {
 
 	Terra::device->FindPhysicalDevice(vkInstance, vkSurface);
 	VkPhysicalDevice physicalDevice = Terra::device->GetPhysicalDevice();
-	EXPECT_NE(physicalDevice, VK_NULL_HANDLE) << "Failed to find a suitable Physical Device.";
+	VkObjectInitCheck("VkPhysicalDevice", physicalDevice);
 
 	Terra::device->CreateLogicalDevice(SpecificValues::meshShader);
 	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
-	EXPECT_NE(logicalDevice, VK_NULL_HANDLE) << "Failed to initialise the logicalDevice.";
+	VkObjectInitCheck("VkDevice", logicalDevice);
 }
 
 TEST_F(RendererVKTest, DisplayGetResolutionTest) {
@@ -95,4 +97,129 @@ TEST_F(RendererVKTest, DisplayGetResolutionTest) {
 	EXPECT_EQ(width, SpecificValues::testDisplayWidth) << "Display width doesn't match.";
 	EXPECT_EQ(height, SpecificValues::testDisplayHeight)
 		<< "Display height doesn't match.";
+}
+
+TEST_F(RendererVKTest, ResourcesInitTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+	VkPhysicalDevice physicalDevice = Terra::device->GetPhysicalDevice();
+
+	_vkResourceView::SetBufferAlignments(physicalDevice);
+
+	Terra::InitResources(s_objectManager, physicalDevice, logicalDevice);
+	ObjectInitCheck("gpuOnlyMemory", Terra::Resources::gpuOnlyMemory);
+	ObjectInitCheck("cpuWriteMemory", Terra::Resources::cpuWriteMemory);
+	ObjectInitCheck("uploadMemory", Terra::Resources::uploadMemory);
+	ObjectInitCheck("uploadContainer", Terra::Resources::uploadContainer);
+}
+
+static std::string FormatQueueCompName(
+	const char* queueName, const char* objectName, size_t index
+) noexcept {
+	return std::string(queueName) + objectName + std::to_string(index);
+}
+
+static void CheckQueueVkObjects(
+	const char* queueName, const std::unique_ptr<VKCommandBuffer>& cmdBuffer,
+	std::unique_ptr<VkSyncObjects>& syncObjects, size_t count
+) {
+	for (size_t index = 0u; index < count; ++index) {
+		VkCommandBuffer vkCmdBuffer = cmdBuffer->GetCommandBuffer(index);
+		VkObjectInitCheck(FormatQueueCompName(queueName, " CmdBuffer ", index), vkCmdBuffer);
+
+		VkFence vkFence = syncObjects->GetFrontFence();
+		VkObjectInitCheck(FormatQueueCompName(queueName, " Fence ", index), vkFence);
+
+		VkSemaphore vkSemaphore = syncObjects->GetFrontSemaphore();
+		VkObjectInitCheck(FormatQueueCompName(queueName, " Semaphore ", index), vkSemaphore);
+
+		syncObjects->AdvanceSyncObjectsInQueue();
+	}
+}
+
+static void CheckQueueObjects(
+	const char* queueName, const std::unique_ptr<VkCommandQueue>& cmdQueue,
+	const std::unique_ptr<VKCommandBuffer>& cmdBuffer,
+	const std::unique_ptr<VkSyncObjects>& syncObjects
+) {
+	std::string queueNameStr = queueName;
+
+	ObjectInitCheck(queueNameStr + "Queue", cmdQueue);
+	ObjectInitCheck(queueNameStr + "CmdBuffer", cmdBuffer);
+	ObjectInitCheck(queueNameStr + "SyncObjects", syncObjects);
+}
+
+TEST_F(RendererVKTest, QueuesInitTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+
+	auto [graphicsQueueHandle, graphicsQueueFamilyIndex] = Terra::device->GetQueue(
+		QueueType::GraphicsQueue
+	);
+	Terra::InitGraphicsQueue(
+		s_objectManager, graphicsQueueHandle, logicalDevice, graphicsQueueFamilyIndex,
+		SpecificValues::bufferCount
+	);
+	CheckQueueObjects(
+		"graphics", Terra::graphicsQueue, Terra::graphicsCmdBuffer, Terra::graphicsSyncObjects
+	);
+	CheckQueueVkObjects(
+		"Graphics", Terra::graphicsCmdBuffer, Terra::graphicsSyncObjects,
+		SpecificValues::bufferCount
+	);
+
+	auto [transferQueueHandle, transferQueueFamilyIndex] = Terra::device->GetQueue(
+		QueueType::TransferQueue
+	);
+	Terra::InitTransferQueue(
+		s_objectManager, transferQueueHandle, logicalDevice, transferQueueFamilyIndex
+	);
+	CheckQueueObjects(
+		"transfer", Terra::transferQueue, Terra::transferCmdBuffer, Terra::transferSyncObjects
+	);
+	CheckQueueVkObjects("transfer", Terra::transferCmdBuffer, Terra::transferSyncObjects, 1u);
+
+	auto [computeQueueHandle, computeQueueFamilyIndex] = Terra::device->GetQueue(
+		QueueType::ComputeQueue
+	);
+	Terra::InitComputeQueue(
+		s_objectManager, computeQueueHandle, logicalDevice, computeQueueFamilyIndex,
+		SpecificValues::bufferCount
+	);
+	CheckQueueObjects(
+		"compute", Terra::computeQueue, Terra::computeCmdBuffer, Terra::computeSyncObjects
+	);
+	CheckQueueVkObjects(
+		"compute", Terra::computeCmdBuffer, Terra::computeSyncObjects,
+		SpecificValues::bufferCount
+	);
+}
+
+TEST_F(RendererVKTest, SwapchainInitTest) {
+	auto [graphicsQueueHandle, graphicsQueueFamilyIndex] = Terra::device->GetQueue(
+		QueueType::GraphicsQueue
+	);
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+	VkPhysicalDevice physicalDevice = Terra::device->GetPhysicalDevice();
+	VkSurfaceKHR vkSurface = Terra::surface->GetSurface();
+
+	SwapChainManager::Args swapArguments{
+		.device = logicalDevice,
+		.surface = vkSurface,
+		.surfaceInfo = QuerySurfaceCapabilities(physicalDevice, vkSurface),
+		.width = SpecificValues::windowWidth,
+		.height = SpecificValues::windowHeight,
+		.bufferCount = SpecificValues::bufferCount,
+		// Graphics and Present queues should be the same
+		.presentQueue = graphicsQueueHandle
+	};
+
+	s_objectManager.CreateObject(Terra::swapChain, swapArguments, 1u);
+	ObjectInitCheck("swapChain", Terra::swapChain);
+
+	VkSwapchainKHR swapchain = Terra::swapChain->GetRef();
+	VkObjectInitCheck("VkSwapchainKHR", swapchain);
+
+	for (size_t index = 0u; index < SpecificValues::bufferCount; ++index) {
+		VkFramebuffer frameBuffer = Terra::swapChain->GetFramebuffer(index);
+		VkObjectNullCheck(std::string("VkFrameBuffer") + std::to_string(index), frameBuffer);
+	}
 }

@@ -75,7 +75,7 @@ endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${TERRA_DIR}/includes/ ${TERRA_DIR}/includes/VK/ ${TERRA_DIR}/includes/Exceptions/ ${TERRA_DIR}/templates/ 
-    ${TERRA_DIR}/exports/ ${TERRA_DIR}/DirectXMath/Inc/ ${TERRA_DIR}/DirectXMath/Extensions/
+    ${TERRA_DIR}/exports/ ${TERRA_DIR}/DirectXMath/Inc/ ${TERRA_DIR}/DirectXMath/Extensions/ includes/
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE "$<$<CONFIG:DEBUG>:_DEBUG>" "$<$<CONFIG:RELEASE>:NDEBUG>")
