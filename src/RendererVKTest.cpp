@@ -3,12 +3,13 @@
 #include <SimpleWindow.hpp>
 #include <Terra.hpp>
 
-namespace DeviceSpecificValues {
+namespace SpecificValues {
 	constexpr std::uint64_t testDisplayWidth = 2560u;
 	constexpr std::uint64_t testDisplayHeight = 1440u;
 	constexpr std::uint32_t windowWidth = 1920u;
 	constexpr std::uint32_t windowHeight = 1080u;
 	constexpr const char* appName = "Terra";
+	constexpr bool meshShader = true;
 }
 
 class RendererVKTest : public ::testing::Test {
@@ -21,8 +22,8 @@ protected:
 
 #ifdef TERRA_WIN32
 	static inline SimpleWindow s_window{
-		DeviceSpecificValues::windowWidth, DeviceSpecificValues::windowHeight,
-		DeviceSpecificValues::appName
+		SpecificValues::windowWidth, SpecificValues::windowHeight,
+		SpecificValues::appName
 	};
 #endif
 };
@@ -34,7 +35,7 @@ TEST_F(RendererVKTest, DisplayInitTest) {
 }
 
 TEST_F(RendererVKTest, VkInstanceInitTest) {
-	s_objectManager.CreateObject(Terra::vkInstance, { DeviceSpecificValues::appName }, 5u);
+	s_objectManager.CreateObject(Terra::vkInstance, { SpecificValues::appName }, 5u);
 	EXPECT_NE(Terra::vkInstance, nullptr) << "Failed to initialise vkInstanceManager.";
 
 	Terra::vkInstance->AddExtensionNames(Terra::display->GetRequiredExtensions());
@@ -74,11 +75,14 @@ TEST_F(RendererVKTest, DeviceInitTest) {
 	VkSurfaceKHR vkSurface = Terra::surface->GetSurface();
 	VkInstance vkInstance = Terra::vkInstance->GetVKInstance();
 
+	if (SpecificValues::meshShader)
+		Terra::device->AddExtensionName("VK_EXT_mesh_shader");
+
 	Terra::device->FindPhysicalDevice(vkInstance, vkSurface);
 	VkPhysicalDevice physicalDevice = Terra::device->GetPhysicalDevice();
 	EXPECT_NE(physicalDevice, VK_NULL_HANDLE) << "Failed to find a suitable Physical Device.";
 
-	Terra::device->CreateLogicalDevice();
+	Terra::device->CreateLogicalDevice(SpecificValues::meshShader);
 	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
 	EXPECT_NE(logicalDevice, VK_NULL_HANDLE) << "Failed to initialise the logicalDevice.";
 }
@@ -88,7 +92,7 @@ TEST_F(RendererVKTest, DisplayGetResolutionTest) {
 
 	auto [width, height] = Terra::display->GetDisplayResolution(physicalDevice, 0u);
 
-	EXPECT_EQ(width, DeviceSpecificValues::testDisplayWidth) << "Display width doesn't match.";
-	EXPECT_EQ(height, DeviceSpecificValues::testDisplayHeight)
+	EXPECT_EQ(width, SpecificValues::testDisplayWidth) << "Display width doesn't match.";
+	EXPECT_EQ(height, SpecificValues::testDisplayHeight)
 		<< "Display height doesn't match.";
 }
