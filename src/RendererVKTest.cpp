@@ -3,6 +3,8 @@
 #include <SimpleWindow.hpp>
 #include <Terra.hpp>
 #include <GenericCheckFunctions.hpp>
+#include <VertexManagerVertexShader.hpp>
+#include <VertexManagerMeshShader.hpp>
 
 namespace SpecificValues {
 	constexpr std::uint64_t testDisplayWidth = 2560u;
@@ -112,10 +114,10 @@ TEST_F(RendererVKTest, ResourcesInitTest) {
 	ObjectInitCheck("uploadContainer", Terra::Resources::uploadContainer);
 }
 
-static std::string FormatQueueCompName(
-	const char* queueName, const char* objectName, size_t index
+static std::string FormatCompName(
+	const char* name, const char* objectName, size_t index
 ) noexcept {
-	return std::string(queueName) + objectName + std::to_string(index);
+	return std::string(name) + objectName + std::to_string(index);
 }
 
 static void CheckQueueVkObjects(
@@ -124,13 +126,13 @@ static void CheckQueueVkObjects(
 ) {
 	for (size_t index = 0u; index < count; ++index) {
 		VkCommandBuffer vkCmdBuffer = cmdBuffer->GetCommandBuffer(index);
-		VkObjectInitCheck(FormatQueueCompName(queueName, " CmdBuffer ", index), vkCmdBuffer);
+		VkObjectInitCheck(FormatCompName(queueName, " CmdBuffer ", index), vkCmdBuffer);
 
 		VkFence vkFence = syncObjects->GetFrontFence();
-		VkObjectInitCheck(FormatQueueCompName(queueName, " Fence ", index), vkFence);
+		VkObjectInitCheck(FormatCompName(queueName, " Fence ", index), vkFence);
 
 		VkSemaphore vkSemaphore = syncObjects->GetFrontSemaphore();
-		VkObjectInitCheck(FormatQueueCompName(queueName, " Semaphore ", index), vkSemaphore);
+		VkObjectInitCheck(FormatCompName(queueName, " Semaphore ", index), vkSemaphore);
 
 		syncObjects->AdvanceSyncObjectsInQueue();
 	}
@@ -222,4 +224,59 @@ TEST_F(RendererVKTest, SwapchainInitTest) {
 		VkFramebuffer frameBuffer = Terra::swapChain->GetFramebuffer(index);
 		VkObjectNullCheck(std::string("VkFrameBuffer") + std::to_string(index), frameBuffer);
 	}
+}
+
+static void DescriptorObjectsCheck(
+	const char* name, std::unique_ptr<DescriptorSetManager>& descManager
+) {
+	VkDescriptorSetLayout const* descLayout = descManager->GetDescriptorSetLayouts();
+
+	for (size_t index = 0u; index < SpecificValues::bufferCount; ++index) {
+		VkObjectNullCheck(
+			FormatCompName(name, " VkDescriptorSetLayout ", index), descLayout[index]
+		);
+
+		VkDescriptorSet descSet = descManager->GetDescriptorSet(index);
+		VkObjectNullCheck(FormatCompName(name, " VkDescriptorSet ", index), descSet);
+	}
+}
+
+TEST_F(RendererVKTest, DescriptorsInitTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+
+	Terra::InitDescriptorSets(s_objectManager, logicalDevice, SpecificValues::bufferCount);
+	ObjectInitCheck("graphicsDescriptorSet", Terra::graphicsDescriptorSet);
+	ObjectInitCheck("computeDescriptorSet", Terra::computeDescriptorSet);
+
+	DescriptorObjectsCheck("graphicsDescriptorSet", Terra::graphicsDescriptorSet);
+	DescriptorObjectsCheck("computeDescriptorSet", Terra::computeDescriptorSet);
+}
+TEST_F(RendererVKTest, VertexManagerInitTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+
+	std::vector<Vertex> verticesTest;
+	verticesTest.emplace_back();
+	verticesTest.emplace_back();
+	verticesTest.emplace_back();
+
+	std::vector<std::uint32_t> indicesTest;
+	indicesTest.emplace_back();
+	indicesTest.emplace_back();
+	indicesTest.emplace_back();
+
+	std::vector<Vertex> verticesCopy = verticesTest;
+	std::vector<std::uint32_t> indicesCopy = indicesTest;
+
+	VertexManagerVertexShader vertexManagerVS{ logicalDevice };
+	vertexManagerVS.AddGVerticesAndIndices(
+		logicalDevice, std::move(verticesTest), std::move(indicesTest)
+	);
+
+	std::vector<std::uint32_t> primIndices = indicesCopy;
+	VertexManagerMeshShader vertexManagerMS{
+		logicalDevice, SpecificValues::bufferCount, {0, 1}
+	};
+	vertexManagerMS.AddGVerticesAndPrimIndices(
+		logicalDevice, std::move(verticesCopy), std::move(indicesCopy), std::move(primIndices)
+	);
 }
