@@ -5,6 +5,7 @@
 #include <GenericCheckFunctions.hpp>
 #include <VertexManagerVertexShader.hpp>
 #include <VertexManagerMeshShader.hpp>
+#include <VkResourceViews.hpp>
 
 namespace SpecificValues {
 	constexpr std::uint64_t testDisplayWidth = 2560u;
@@ -12,6 +13,7 @@ namespace SpecificValues {
 	constexpr std::uint32_t windowWidth = 1920u;
 	constexpr std::uint32_t windowHeight = 1080u;
 	constexpr std::uint32_t bufferCount = 2u;
+	constexpr VkDeviceSize testBufferSize = 128u;
 	constexpr const char* appName = "Terra";
 	constexpr bool meshShader = true;
 }
@@ -19,10 +21,12 @@ namespace SpecificValues {
 class RendererVKTest : public ::testing::Test {
 protected:
 	static inline void TearDownTestSuite() {
+		s_testResourceView.reset();
 		s_objectManager.StartCleanUp();
 	}
 
 	static inline ObjectManager s_objectManager;
+	static inline std::unique_ptr<VkResourceView> s_testResourceView;
 
 #ifdef TERRA_WIN32
 	static inline SimpleWindow s_window{
@@ -251,6 +255,98 @@ TEST_F(RendererVKTest, DescriptorsInitTest) {
 	DescriptorObjectsCheck("graphicsDescriptorSet", Terra::graphicsDescriptorSet);
 	DescriptorObjectsCheck("computeDescriptorSet", Terra::computeDescriptorSet);
 }
+
+TEST_F(RendererVKTest, VkResourceViewInitTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+	s_testResourceView = std::make_unique<VkResourceView>(logicalDevice);
+	ObjectInitCheck("testResourceView", s_testResourceView);
+
+	{
+		VkBuffer buffer = s_testResourceView->GetResource();
+		VkObjectNullCheck("VkBuffer", buffer);
+	}
+
+	s_testResourceView->CreateResource(
+		logicalDevice, SpecificValues::testBufferSize, SpecificValues::bufferCount,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+	);
+	s_testResourceView->SetMemoryOffsetAndType(logicalDevice, MemoryType::gpuOnly);
+
+	// Sanity test
+	VkPhysicalDevice device = Terra::device->GetPhysicalDevice();
+	VkPhysicalDeviceProperties deviceProperty{};
+	vkGetPhysicalDeviceProperties(device, &deviceProperty);
+
+	VkDeviceSize expectedSubAllocationSize = Align(
+		SpecificValues::testBufferSize, deviceProperty.limits.minStorageBufferOffsetAlignment
+	);
+
+	VkDeviceSize subAllocationSize = s_testResourceView->GetSubAllocationOffset(1u);
+	EXPECT_EQ(expectedSubAllocationSize, subAllocationSize)
+		<< "SubAllocationSize doesn't match.";
+
+	VkDeviceSize subBufferSize = s_testResourceView->GetSubBufferSize();
+	EXPECT_EQ(subBufferSize, SpecificValues::testBufferSize) << "SubBufferSize doesn't match.";
+
+	VkDeviceSize expectedBufferSize =
+		subAllocationSize * static_cast<VkDeviceSize>(SpecificValues::bufferCount - 1u)
+		+ subBufferSize;
+	VkDeviceSize bufferSize = s_testResourceView->GetBufferSize();
+	EXPECT_EQ(bufferSize, expectedBufferSize) << "BufferSize doesn't match.";
+
+	VkBuffer buffer = s_testResourceView->GetResource();
+	VkObjectInitCheck("VkBuffer", buffer);
+}
+
+TEST_F(RendererVKTest, MemoryCreationTest) {
+	VkDeviceMemory gpuMemory = Terra::Resources::gpuOnlyMemory->GetMemoryHandle();
+	VkObjectNullCheck("GPUMemory", gpuMemory);
+
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+	Terra::Resources::gpuOnlyMemory->AllocateMemory(logicalDevice);
+
+	gpuMemory = Terra::Resources::gpuOnlyMemory->GetMemoryHandle();
+	VkObjectInitCheck("GPUMemory", gpuMemory);
+}
+
+TEST_F(RendererVKTest, ResourceViewMemoryAndDescriptorTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+	s_testResourceView->BindResourceToMemory(logicalDevice);
+
+	DescriptorInfo inputDescInfo{
+		.bindingSlot = 1u,
+		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+	};
+
+	auto inputBufferInfos = s_testResourceView->GetDescBufferInfoSplit(
+		SpecificValues::bufferCount
+	);
+
+	Terra::graphicsDescriptorSet->AddBuffersSplit(
+		inputDescInfo, std::move(inputBufferInfos), VK_SHADER_STAGE_FRAGMENT_BIT
+	);
+}
+
+TEST_F(RendererVKTest, DescriptorCreationTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+	Terra::graphicsDescriptorSet->CreateDescriptorSets(logicalDevice);
+	DescriptorSetManager* descManager = Terra::graphicsDescriptorSet.get();
+	const char* name = "graphics";
+
+	VkDescriptorSetLayout const* descLayout = descManager->GetDescriptorSetLayouts();
+
+	for (size_t index = 0u; index < SpecificValues::bufferCount; ++index) {
+		VkObjectInitCheck(
+			FormatCompName(name, " VkDescriptorSetLayout ", index), descLayout[index]
+		);
+
+		VkDescriptorSet descSet = descManager->GetDescriptorSet(index);
+		VkObjectInitCheck(FormatCompName(name, " VkDescriptorSet ", index), descSet);
+	}
+}
+
+// Fake Shader test
+
 TEST_F(RendererVKTest, VertexManagerInitTest) {
 	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
 
