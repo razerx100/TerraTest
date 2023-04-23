@@ -6,6 +6,10 @@
 #include <VertexManagerVertexShader.hpp>
 #include <VertexManagerMeshShader.hpp>
 #include <VkResourceViews.hpp>
+#include <VkShader.hpp>
+#include <VKPipelineObject.hpp>
+#include <PipelineLayout.hpp>
+#include <VkQueueFamilyManager.hpp>
 
 namespace SpecificValues {
 	constexpr std::uint64_t testDisplayWidth = 2560u;
@@ -27,6 +31,7 @@ protected:
 
 	static inline ObjectManager s_objectManager;
 	static inline std::unique_ptr<VkResourceView> s_testResourceView;
+	static inline VkQueueFamilyMananger s_queFamilyMan;
 
 #ifdef TERRA_WIN32
 	static inline SimpleWindow s_window{
@@ -93,6 +98,8 @@ TEST_F(RendererVKTest, DeviceInitTest) {
 	Terra::device->CreateLogicalDevice(SpecificValues::meshShader);
 	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
 	VkObjectInitCheck("VkDevice", logicalDevice);
+
+	s_queFamilyMan = Terra::device->GetQueueFamilyManager();
 }
 
 TEST_F(RendererVKTest, DisplayGetResolutionTest) {
@@ -157,12 +164,9 @@ static void CheckQueueObjects(
 TEST_F(RendererVKTest, QueuesInitTest) {
 	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
 
-	auto [graphicsQueueHandle, graphicsQueueFamilyIndex] = Terra::device->GetQueue(
-		QueueType::GraphicsQueue
-	);
 	Terra::InitGraphicsQueue(
-		s_objectManager, graphicsQueueHandle, logicalDevice, graphicsQueueFamilyIndex,
-		SpecificValues::bufferCount
+		s_objectManager, s_queFamilyMan.GetQueue(GraphicsQueue), logicalDevice,
+		s_queFamilyMan.GetIndex(GraphicsQueue), SpecificValues::bufferCount
 	);
 	CheckQueueObjects(
 		"graphics", Terra::graphicsQueue, Terra::graphicsCmdBuffer, Terra::graphicsSyncObjects
@@ -172,23 +176,18 @@ TEST_F(RendererVKTest, QueuesInitTest) {
 		SpecificValues::bufferCount
 	);
 
-	auto [transferQueueHandle, transferQueueFamilyIndex] = Terra::device->GetQueue(
-		QueueType::TransferQueue
-	);
 	Terra::InitTransferQueue(
-		s_objectManager, transferQueueHandle, logicalDevice, transferQueueFamilyIndex
+		s_objectManager, s_queFamilyMan.GetQueue(TransferQueue), logicalDevice,
+		s_queFamilyMan.GetIndex(TransferQueue)
 	);
 	CheckQueueObjects(
 		"transfer", Terra::transferQueue, Terra::transferCmdBuffer, Terra::transferSyncObjects
 	);
 	CheckQueueVkObjects("transfer", Terra::transferCmdBuffer, Terra::transferSyncObjects, 1u);
 
-	auto [computeQueueHandle, computeQueueFamilyIndex] = Terra::device->GetQueue(
-		QueueType::ComputeQueue
-	);
 	Terra::InitComputeQueue(
-		s_objectManager, computeQueueHandle, logicalDevice, computeQueueFamilyIndex,
-		SpecificValues::bufferCount
+		s_objectManager, s_queFamilyMan.GetQueue(ComputeQueue), logicalDevice,
+		s_queFamilyMan.GetIndex(ComputeQueue), SpecificValues::bufferCount
 	);
 	CheckQueueObjects(
 		"compute", Terra::computeQueue, Terra::computeCmdBuffer, Terra::computeSyncObjects
@@ -200,9 +199,6 @@ TEST_F(RendererVKTest, QueuesInitTest) {
 }
 
 TEST_F(RendererVKTest, SwapchainInitTest) {
-	auto [graphicsQueueHandle, graphicsQueueFamilyIndex] = Terra::device->GetQueue(
-		QueueType::GraphicsQueue
-	);
 	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
 	VkPhysicalDevice physicalDevice = Terra::device->GetPhysicalDevice();
 	VkSurfaceKHR vkSurface = Terra::surface->GetSurface();
@@ -215,7 +211,7 @@ TEST_F(RendererVKTest, SwapchainInitTest) {
 		.height = SpecificValues::windowHeight,
 		.bufferCount = SpecificValues::bufferCount,
 		// Graphics and Present queues should be the same
-		.presentQueue = graphicsQueueHandle
+		.presentQueue = s_queFamilyMan.GetQueue(GraphicsQueue)
 	};
 
 	s_objectManager.CreateObject(Terra::swapChain, swapArguments, 1u);
@@ -323,17 +319,20 @@ TEST_F(RendererVKTest, ResourceViewMemoryAndDescriptorTest) {
 	);
 
 	Terra::graphicsDescriptorSet->AddBuffersSplit(
-		inputDescInfo, std::move(inputBufferInfos), VK_SHADER_STAGE_FRAGMENT_BIT
+		inputDescInfo, std::move(inputBufferInfos), VK_SHADER_STAGE_COMPUTE_BIT
 	);
 }
 
 TEST_F(RendererVKTest, DescriptorCreationTest) {
 	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
 	Terra::graphicsDescriptorSet->CreateDescriptorSets(logicalDevice);
-	DescriptorSetManager* descManager = Terra::graphicsDescriptorSet.get();
+	DescriptorSetManager const* descManager = Terra::graphicsDescriptorSet.get();
 	const char* name = "graphics";
 
 	VkDescriptorSetLayout const* descLayout = descManager->GetDescriptorSetLayouts();
+	size_t descriptorSetCount = descManager->GetDescriptorSetCount();
+	EXPECT_EQ(descriptorSetCount, SpecificValues::bufferCount)
+		<< "DescCount doesn't match.";
 
 	for (size_t index = 0u; index < SpecificValues::bufferCount; ++index) {
 		VkObjectInitCheck(
@@ -344,8 +343,6 @@ TEST_F(RendererVKTest, DescriptorCreationTest) {
 		VkObjectInitCheck(FormatCompName(name, " VkDescriptorSet ", index), descSet);
 	}
 }
-
-// Fake Shader test
 
 TEST_F(RendererVKTest, VertexManagerInitTest) {
 	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
@@ -369,10 +366,26 @@ TEST_F(RendererVKTest, VertexManagerInitTest) {
 	);
 
 	std::vector<std::uint32_t> primIndices = indicesCopy;
+
 	VertexManagerMeshShader vertexManagerMS{
-		logicalDevice, SpecificValues::bufferCount, {0, 1}
+		logicalDevice, SpecificValues::bufferCount,
+		s_queFamilyMan.GetTransferAndGraphicsIndices()
 	};
 	vertexManagerMS.AddGVerticesAndPrimIndices(
 		logicalDevice, std::move(verticesCopy), std::move(indicesCopy), std::move(primIndices)
 	);
+}
+
+TEST_F(RendererVKTest, VkPipelineLayoutTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+
+	DescriptorSetManager const* descManager = Terra::graphicsDescriptorSet.get();
+
+	PipelineLayout layout{ logicalDevice };
+	layout.CreateLayout(
+		descManager->GetDescriptorSetLayouts(), descManager->GetDescriptorSetCount()
+	);
+
+	VkPipelineLayout pipeLayout = layout.GetLayout();
+	VkObjectInitCheck("VkPipelineLayout", pipeLayout);
 }
