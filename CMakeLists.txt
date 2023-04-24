@@ -97,3 +97,7 @@ if(MSVC)
 endif()
 
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+
+add_subdirectory(shaders)
+
+add_dependencies(${PROJECT_NAME} GLSL)

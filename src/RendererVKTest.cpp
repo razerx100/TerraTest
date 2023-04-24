@@ -10,6 +10,7 @@
 #include <VKPipelineObject.hpp>
 #include <PipelineLayout.hpp>
 #include <VkQueueFamilyManager.hpp>
+#include <VKRenderPass.hpp>
 
 namespace SpecificValues {
 	constexpr std::uint64_t testDisplayWidth = 2560u;
@@ -19,6 +20,7 @@ namespace SpecificValues {
 	constexpr std::uint32_t bufferCount = 2u;
 	constexpr VkDeviceSize testBufferSize = 128u;
 	constexpr const char* appName = "Terra";
+	constexpr const wchar_t* shaderPath = L"resources/shaders/";
 	constexpr bool meshShader = true;
 }
 
@@ -310,7 +312,7 @@ TEST_F(RendererVKTest, ResourceViewMemoryAndDescriptorTest) {
 	s_testResourceView->BindResourceToMemory(logicalDevice);
 
 	DescriptorInfo inputDescInfo{
-		.bindingSlot = 1u,
+		.bindingSlot = 0u,
 		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
 	};
 
@@ -319,7 +321,7 @@ TEST_F(RendererVKTest, ResourceViewMemoryAndDescriptorTest) {
 	);
 
 	Terra::graphicsDescriptorSet->AddBuffersSplit(
-		inputDescInfo, std::move(inputBufferInfos), VK_SHADER_STAGE_COMPUTE_BIT
+		inputDescInfo, std::move(inputBufferInfos), VK_SHADER_STAGE_ALL
 	);
 }
 
@@ -388,4 +390,95 @@ TEST_F(RendererVKTest, VkPipelineLayoutTest) {
 
 	VkPipelineLayout pipeLayout = layout.GetLayout();
 	VkObjectInitCheck("VkPipelineLayout", pipeLayout);
+}
+
+TEST_F(RendererVKTest, VkShaderInitTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+
+	VkShader vertexShader{ logicalDevice };
+	vertexShader.CreateShader(
+		logicalDevice, SpecificValues::shaderPath + std::wstring(L"VertexShaderTest.spv")
+	);
+
+	VkShaderModule shaderModule = vertexShader.GetShaderModule();
+	VkObjectInitCheck("VkShaderModule", shaderModule);
+}
+
+TEST_F(RendererVKTest, VkComputePSOTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+
+	DescriptorSetManager const* descManager = Terra::graphicsDescriptorSet.get();
+
+	PipelineLayout layout{ logicalDevice };
+	layout.CreateLayout(
+		descManager->GetDescriptorSetLayouts(), descManager->GetDescriptorSetCount()
+	);
+
+	VkPipelineLayout pipeLayout = layout.GetLayout();
+
+	VkShader computeShader{ logicalDevice };
+	computeShader.CreateShader(
+		logicalDevice, SpecificValues::shaderPath + std::wstring(L"ComputeShaderTest.spv")
+	);
+
+	VkShaderModule shaderModule = computeShader.GetShaderModule();
+
+	VkPipelineObject computePSO{ logicalDevice };
+	computePSO.CreateComputePipeline(logicalDevice, pipeLayout, shaderModule);
+
+	VkPipeline computePipeline = computePSO.GetPipeline();
+	VkObjectInitCheck("VkComputePipeline", computePipeline);
+}
+
+TEST_F(RendererVKTest, VkRenderPassInitTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+
+	VKRenderPass renderPass{ logicalDevice };
+	renderPass.CreateRenderPass(logicalDevice, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
+
+	VkRenderPass vkRenderPass = renderPass.GetRenderPass();
+	VkObjectInitCheck("VkRenderPass", vkRenderPass);
+}
+
+TEST_F(RendererVKTest, VkGraphicsVertexPSOTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+
+	DescriptorSetManager const* descManager = Terra::graphicsDescriptorSet.get();
+
+	PipelineLayout layout{ logicalDevice };
+	layout.CreateLayout(
+		descManager->GetDescriptorSetLayouts(), descManager->GetDescriptorSetCount()
+	);
+
+	VkPipelineLayout pipeLayout = layout.GetLayout();
+
+	VkShader vertexShader{ logicalDevice };
+	vertexShader.CreateShader(
+		logicalDevice, SpecificValues::shaderPath + std::wstring(L"VertexShaderTest.spv")
+	);
+
+	VkShaderModule vertexShaderModule = vertexShader.GetShaderModule();
+
+	VkShader fragmentShader{ logicalDevice };
+	fragmentShader.CreateShader(
+		logicalDevice, SpecificValues::shaderPath + std::wstring(L"FragmentShaderTest.spv")
+	);
+
+	VkShaderModule fragmentShaderModule = fragmentShader.GetShaderModule();
+
+	VKRenderPass renderPass{ logicalDevice };
+	renderPass.CreateRenderPass(logicalDevice, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
+
+	VkRenderPass vkRenderPass = renderPass.GetRenderPass();
+
+	VkPipelineObject graphicsVertexPSO{ logicalDevice };
+	graphicsVertexPSO.CreateGraphicsPipeline(
+		logicalDevice, pipeLayout, vkRenderPass,
+		VertexLayout()
+		.AddInput(VK_FORMAT_R32G32B32_SFLOAT, 12u)
+		.InitLayout(), vertexShaderModule, fragmentShaderModule
+	);
+
+	VkPipeline graphicsVertexPipeline = graphicsVertexPSO.GetPipeline();
+	VkObjectInitCheck("VkGraphicsVertexPipeline", graphicsVertexPipeline);
 }
