@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 file(
     GLOB_RECURSE SH_SRC
-     src/*.frag src/*.vert src/*.comp
+     src/*.frag src/*.vert src/*.comp src/*.mesh
 )
 
 find_program(
@@ -44,7 +44,7 @@ foreach(SHADER ${SH_SRC})
         COMMAND ${CMAKE_COMMAND}
          -E make_directory ${CMAKE_BINARY_DIR}/${SHADER_PATH}
         COMMAND
-         ${GLSLC} ${SHADER} -o ${SPIRV}
+         ${GLSLC} ${SHADER} -o ${SPIRV} --target-spv=spv1.4
         COMMAND ${CMAKE_COMMAND}
          -E copy ${SPIRV} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/${SHADER_PATH}/${FILE_NAME}.spv
         DEPENDS

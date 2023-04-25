@@ -472,7 +472,7 @@ TEST_F(RendererVKTest, VkGraphicsVertexPSOTest) {
 	VkRenderPass vkRenderPass = renderPass.GetRenderPass();
 
 	VkPipelineObject graphicsVertexPSO{ logicalDevice };
-	graphicsVertexPSO.CreateGraphicsPipeline(
+	graphicsVertexPSO.CreateGraphicsPipelineVS(
 		logicalDevice, pipeLayout, vkRenderPass,
 		VertexLayout()
 		.AddInput(VK_FORMAT_R32G32B32_SFLOAT, 12u)
@@ -481,4 +481,37 @@ TEST_F(RendererVKTest, VkGraphicsVertexPSOTest) {
 
 	VkPipeline graphicsVertexPipeline = graphicsVertexPSO.GetPipeline();
 	VkObjectInitCheck("VkGraphicsVertexPipeline", graphicsVertexPipeline);
+}
+
+TEST_F(RendererVKTest, VkGraphicsMeshPSOTest) {
+	VkDevice logicalDevice = Terra::device->GetLogicalDevice();
+
+	DescriptorSetManager const* descManager = Terra::graphicsDescriptorSet.get();
+
+	PipelineLayout layout{ logicalDevice };
+	layout.CreateLayout(
+		descManager->GetDescriptorSetLayouts(), descManager->GetDescriptorSetCount()
+	);
+
+	VkPipelineLayout pipeLayout = layout.GetLayout();
+
+	VkShader meshShader{ logicalDevice };
+	meshShader.CreateShader(
+		logicalDevice, SpecificValues::shaderPath + std::wstring(L"MeshShaderTest.spv")
+	);
+
+	VkShaderModule meshShaderModule = meshShader.GetShaderModule();
+
+	VKRenderPass renderPass{ logicalDevice };
+	renderPass.CreateRenderPass(logicalDevice, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
+
+	VkRenderPass vkRenderPass = renderPass.GetRenderPass();
+
+	VkPipelineObject graphicsMeshPSO{ logicalDevice };
+	graphicsMeshPSO.CreateGraphicsPipelineMS(
+		logicalDevice, pipeLayout, vkRenderPass, meshShaderModule
+	);
+
+	VkPipeline graphicsMeshPipeline = graphicsMeshPSO.GetPipeline();
+	VkObjectInitCheck("VkGraphicsMeshPipeline", graphicsMeshPipeline);
 }
