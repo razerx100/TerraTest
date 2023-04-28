@@ -502,6 +502,13 @@ TEST_F(RendererVKTest, VkGraphicsMeshPSOTest) {
 
 	VkShaderModule meshShaderModule = meshShader.GetShaderModule();
 
+	VkShader fragmentShader{ logicalDevice };
+	fragmentShader.CreateShader(
+		logicalDevice, SpecificValues::shaderPath + std::wstring(L"FragmentShaderTest.spv")
+	);
+
+	VkShaderModule fragmentShaderModule = fragmentShader.GetShaderModule();
+
 	VKRenderPass renderPass{ logicalDevice };
 	renderPass.CreateRenderPass(logicalDevice, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
 
@@ -509,7 +516,7 @@ TEST_F(RendererVKTest, VkGraphicsMeshPSOTest) {
 
 	VkPipelineObject graphicsMeshPSO{ logicalDevice };
 	graphicsMeshPSO.CreateGraphicsPipelineMS(
-		logicalDevice, pipeLayout, vkRenderPass, meshShaderModule
+		logicalDevice, pipeLayout, vkRenderPass, meshShaderModule, fragmentShaderModule
 	);
 
 	VkPipeline graphicsMeshPipeline = graphicsMeshPSO.GetPipeline();
